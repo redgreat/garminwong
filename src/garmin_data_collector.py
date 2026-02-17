@@ -48,8 +48,21 @@ class GarminDataCollector:
             logger.warning(f"获取活动详情失败 {activity_id}: {e}")
             return None
 
+    def get_activity_polyline(self, activity_id):
+        """获取活动高分辨率GPS轨迹 (polyline full-resolution API)"""
+        try:
+            import time
+            timestamp = int(time.time() * 1000)
+            return garth.connectapi(
+                f"/activity-service/activity/{activity_id}/polyline/full-resolution/",
+                params={"_": str(timestamp)}
+            )
+        except Exception as e:
+            logger.warning(f"获取高分辨率轨迹失败 {activity_id}: {e}")
+            return None
+
     def get_activity_track(self, activity_id):
-        """获取活动GPS轨迹点 (details API)"""
+        """获取活动GPS轨迹点 (details API - 备用方案)"""
         try:
             return garth.connectapi(f"/activity-service/activity/{activity_id}/details")
         except Exception as e:
@@ -96,8 +109,45 @@ class GarminDataCollector:
             "rawjson": json.dumps(act_list_item, ensure_ascii=False, default=str),
         }
 
+    def _parse_polyline_points(self, polyline_data):
+        """解析高分辨率polyline数据
+        格式: {"polyline": [[timestamp_sec, lat, lng], [timestamp_sec, lat, lng], ...]}
+        """
+        if not polyline_data or not isinstance(polyline_data, dict):
+            return []
+        
+        polyline = polyline_data.get("polyline", [])
+        if not polyline:
+            return []
+        
+        points = []
+        for p in polyline:
+            if not p or len(p) < 3:
+                continue
+            # p[0]: 时间戳(秒,科学计数法), p[1]: 纬度, p[2]: 经度
+            try:
+                timestamp_sec = float(p[0])
+                pt = datetime.fromtimestamp(timestamp_sec, tz=timezone.utc)
+                points.append({
+                    "pointtime": pt,
+                    "latitude": float(p[1]),
+                    "longitude": float(p[2]),
+                    "elevation": None,
+                    "heartrate": None,
+                    "speed": None,
+                    "cadence": None,
+                    "power": None,
+                    "temperature": None,
+                    "distance": None,
+                })
+            except (ValueError, TypeError, IndexError) as e:
+                logger.debug(f"跳过无效polyline点: {p}, 错误: {e}")
+                continue
+        
+        return points
+
     def _parse_track_points(self, track_data, activity_start_gmt):
-        """解析轨迹点数据"""
+        """解析轨迹点数据(details API - 备用方案)"""
         if not track_data or not isinstance(track_data, dict):
             return []
 
@@ -188,13 +238,25 @@ class GarminDataCollector:
                 parsed = self._parse_activity_summary(act, detail)
                 self.db.upsert_activity(parsed)
 
-                # 获取GPS轨迹
+                # 获取GPS轨迹 - 优先使用高分辨率polyline接口
                 if act.get("hasPolyline", False):
-                    track = self.get_activity_track(aid)
-                    start_gmt = None
-                    if detail:
-                        start_gmt = detail.get("summaryDTO", {}).get("startTimeGMT")
-                    points = self._parse_track_points(track, start_gmt)
+                    points = []
+                    # 1. 优先尝试高分辨率polyline接口
+                    polyline_data = self.get_activity_polyline(aid)
+                    if polyline_data:
+                        points = self._parse_polyline_points(polyline_data)
+                        if points:
+                            logger.info(f"使用高分辨率polyline接口获取到 {len(points)} 个轨迹点")
+                    
+                    # 2. 如果polyline接口失败,回退到details接口
+                    if not points:
+                        logger.info(f"polyline接口无数据,尝试使用details接口")
+                        track = self.get_activity_track(aid)
+                        start_gmt = None
+                        if detail:
+                            start_gmt = detail.get("summaryDTO", {}).get("startTimeGMT")
+                        points = self._parse_track_points(track, start_gmt)
+                    
                     if points:
                         self.db.batch_upsert_activity_details(aid, points)
                         print(f"  ✅ {act.get('activityName')} - {len(points)} 个轨迹点")
