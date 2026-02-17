@@ -224,6 +224,16 @@ class GarminDataCollector:
     def _save_heart_rate(self, target_date, data):
         if not data:
             return False
+        # 检查是否有有效数据
+        has_data = any([
+            data.get("restingHeartRate"),
+            data.get("maxHeartRate"),
+            data.get("minHeartRate"),
+            data.get("heartRateValues")
+        ])
+        if not has_data:
+            logger.info(f"心率数据 {target_date} 无有效数据,不记录同步状态")
+            return False
         try:
             # 汇总
             self.db.upsert_heartrate({
@@ -237,6 +247,7 @@ class GarminDataCollector:
             hr_values = data.get("heartRateValues")
             if hr_values:
                 self.db.batch_upsert_heartrate_details(target_date, hr_values)
+            # 只有成功保存数据后才记录同步状态
             self.db.upsert_sync("garmin", "heartrate", target_date)
             return True
         except Exception as e:
@@ -260,7 +271,9 @@ class GarminDataCollector:
         if not data:
             return False
         dto = data.get("dailySleepDTO", {})
+        # 检查是否有有效的睡眠数据(睡眠时长必须存在)
         if not dto or dto.get("sleepTimeSeconds") is None:
+            logger.info(f"睡眠数据 {target_date} 无有效数据,不记录同步状态")
             return False
         try:
             scores = dto.get("sleepScores", {})
@@ -287,6 +300,7 @@ class GarminDataCollector:
             sleep_levels = data.get("sleepLevels")
             if sleep_levels:
                 self.db.batch_upsert_sleep_details(target_date, sleep_levels)
+            # 只有成功保存数据后才记录同步状态
             self.db.upsert_sync("garmin", "sleep", target_date)
             return True
         except Exception as e:
@@ -306,6 +320,15 @@ class GarminDataCollector:
     def _save_stress(self, target_date, data):
         if not data:
             return False
+        # 检查是否有有效数据
+        has_data = any([
+            data.get("avgStressLevel"),
+            data.get("maxStressLevel"),
+            data.get("stressValuesArray")
+        ])
+        if not has_data:
+            logger.info(f"压力数据 {target_date} 无有效数据,不记录同步状态")
+            return False
         try:
             self.db.upsert_stress({
                 "stressdate": target_date,
@@ -321,6 +344,7 @@ class GarminDataCollector:
             stress_values = data.get("stressValuesArray")
             if stress_values:
                 self.db.batch_upsert_stress_details(target_date, stress_values)
+            # 只有成功保存数据后才记录同步状态
             self.db.upsert_sync("garmin", "stress", target_date)
             return True
         except Exception as e:
@@ -340,6 +364,17 @@ class GarminDataCollector:
     def _save_spo2(self, target_date, data):
         if not data:
             return False
+        # 检查是否有有效数据
+        has_data = any([
+            data.get("averageSpO2"),
+            data.get("lowestSpO2"),
+            data.get("latestSpO2"),
+            data.get("spO2HourlyAverages"),
+            data.get("continuousReadingDTOList")
+        ])
+        if not has_data:
+            logger.info(f"血氧数据 {target_date} 无有效数据,不记录同步状态")
+            return False
         try:
             self.db.upsert_spo2({
                 "spo2date": target_date,
@@ -351,6 +386,7 @@ class GarminDataCollector:
             })
             # 血氧时序明细
             self.db.batch_upsert_spo2_details(target_date, data)
+            # 只有成功保存数据后才记录同步状态
             self.db.upsert_sync("garmin", "spo2", target_date)
             return True
         except Exception as e:
@@ -370,6 +406,17 @@ class GarminDataCollector:
     def _save_respiration(self, target_date, data):
         if not data:
             return False
+        # 检查是否有有效数据
+        has_data = any([
+            data.get("avgWakingRespirationValue"),
+            data.get("avgSleepRespirationValue"),
+            data.get("highestRespirationValue"),
+            data.get("lowestRespirationValue"),
+            data.get("respirationValuesArray")
+        ])
+        if not has_data:
+            logger.info(f"呼吸数据 {target_date} 无有效数据,不记录同步状态")
+            return False
         try:
             self.db.upsert_respiration({
                 "respdate": target_date,
@@ -385,6 +432,7 @@ class GarminDataCollector:
             resp_values = data.get("respirationValuesArray")
             if resp_values:
                 self.db.batch_upsert_respiration_details(target_date, resp_values)
+            # 只有成功保存数据后才记录同步状态
             self.db.upsert_sync("garmin", "respiration", target_date)
             return True
         except Exception as e:
@@ -406,6 +454,15 @@ class GarminDataCollector:
             return False
         summary = data.get("hrvSummary", data)
         baseline = summary.get("baseline", {})
+        # 检查是否有有效数据
+        has_data = any([
+            summary.get("weeklyAvg"),
+            summary.get("lastNightAvg"),
+            summary.get("lastNight5MinHigh")
+        ])
+        if not has_data:
+            logger.info(f"HRV数据 {target_date} 无有效数据,不记录同步状态")
+            return False
         try:
             self.db.upsert_hrv({
                 "hrvdate": target_date,
@@ -418,6 +475,7 @@ class GarminDataCollector:
                 "hrvstatus": summary.get("status"),
                 "rawjson": json.dumps(data, ensure_ascii=False, default=str),
             })
+            # 只有成功保存数据后才记录同步状态
             self.db.upsert_sync("garmin", "hrv", target_date)
             return True
         except Exception as e:

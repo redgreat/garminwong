@@ -61,11 +61,12 @@ def main():
         print(f"📊 首次运行，回溯 {init_days} 天数据...")
         run_garmin(days_back=init_days)
 
-        # 每日定时：只获取昨天1天
+        # 每日定时:按 sync_days 配置回溯(默认7天)
+        sync_days = garmin_cfg.get('sync_days', 7)
         garmin_schedule = garmin_cfg.get('schedule', '08:00')
-        schedule.every().day.at(garmin_schedule).do(run_garmin, days_back=1)
+        schedule.every().day.at(garmin_schedule).do(run_garmin, days_back=sync_days)
         print(f"\n⏰ 定时任务:")
-        print(f"   - Garmin 每日 {garmin_schedule} (获取前1天数据)")
+        print(f"   - Garmin 每日 {garmin_schedule} (获取前{sync_days}天数据)")
 
         # TODO: 后续扩展
         # polar_schedule = config.get('polar', {}).get('schedule', '08:30')
