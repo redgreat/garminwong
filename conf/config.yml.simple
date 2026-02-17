@@ -1,0 +1,27 @@
+# 数据库配置
+database:
+  host: localhost
+  port: 5432
+  db: db
+  user: user
+  password: password
+
+# 佳明账号配置
+garmin:
+  email: email
+  password: password
+  domain: garmin.cn
+  save_path: ./garmin_session
+  schedule: "08:00"
+  # init_days: 30  # 首次运行回溯天数，不设置则回溯到2016-06-01
+
+# 后续扩展
+# polar:
+#   email: xxx
+#   password: xxx
+#   schedule: "08:30"
+#
+# coros:
+#   email: xxx
+#   password: xxx
+#   schedule: "09:00"
