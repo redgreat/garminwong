@@ -111,23 +111,24 @@ class GarminDataCollector:
 
     def _parse_polyline_points(self, polyline_data):
         """解析高分辨率polyline数据
-        格式: {"polyline": [[timestamp_sec, lat, lng], [timestamp_sec, lat, lng], ...]}
+        格式: {"polyline": [[timestamp_ms, lat, lng], ...]}
+        时间戳单位为毫秒(如 1770408673000.0)
         """
         if not polyline_data or not isinstance(polyline_data, dict):
             return []
-        
+
         polyline = polyline_data.get("polyline", [])
         if not polyline:
             return []
-        
+
         points = []
         for p in polyline:
             if not p or len(p) < 3:
                 continue
-            # p[0]: 时间戳(秒,科学计数法), p[1]: 纬度, p[2]: 经度
+            # p[0]: 时间戳(毫秒), p[1]: 纬度, p[2]: 经度
             try:
-                timestamp_sec = float(p[0])
-                pt = datetime.fromtimestamp(timestamp_sec, tz=timezone.utc)
+                timestamp_ms = float(p[0])
+                pt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
                 points.append({
                     "pointtime": pt,
                     "latitude": float(p[1]),
@@ -143,7 +144,7 @@ class GarminDataCollector:
             except (ValueError, TypeError, IndexError) as e:
                 logger.debug(f"跳过无效polyline点: {p}, 错误: {e}")
                 continue
-        
+
         return points
 
     def _parse_track_points(self, track_data, activity_start_gmt):
